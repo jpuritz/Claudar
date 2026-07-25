@@ -23,7 +23,7 @@ if you don't use the CLI.
 **Homebrew** (recommended):
 
 ```sh
-brew install --cask --no-quarantine jpuritz/tap/claudar
+HOMEBREW_CASK_OPTS=--no-quarantine brew install --cask jpuritz/tap/claudar
 ```
 
 **Or** download `Claudar-menubar.zip` from the
@@ -34,8 +34,12 @@ unzip, drag **Claudar.app** to `/Applications`, then run once:
 xattr -dr com.apple.quarantine "/Applications/Claudar.app"
 ```
 
-*(Both are needed because the app is ad-hoc signed; the flag / command tells
-Gatekeeper to trust it.)*
+*(Both are needed because the app is ad-hoc signed; they tell Gatekeeper to
+trust it. Homebrew 6 removed the `--no-quarantine` **flag** — passing it now
+fails with `invalid option` — but it still honours the same setting through
+`HOMEBREW_CASK_OPTS`, which works on older Homebrew too. If you'd rather not
+use the variable, plain `brew install --cask jpuritz/tap/claudar` followed by
+the `xattr` command above does the same job.)*
 
 **On first launch**, macOS asks to access *Claude Code-credentials* — click
 **Always Allow**. That's how the app reads your usage. No CLI? Skip that prompt

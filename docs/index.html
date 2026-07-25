@@ -200,8 +200,8 @@
     <p class="lede">The same numbers as Claude Code's <code>/usage</code>, tracked live from your macOS menu bar, a desktop widget, and a status window. You'll see the reset coming before you hit it.</p>
     <div class="cta-row">
       <div class="code-cta">
-        <span><span class="p">$</span> brew install --cask --no-quarantine jpuritz/tap/claudar</span>
-        <button class="copy-btn" data-copy="brew install --cask --no-quarantine jpuritz/tap/claudar">copy</button>
+        <span><span class="p">$</span> HOMEBREW_CASK_OPTS=--no-quarantine brew install --cask jpuritz/tap/claudar</span>
+        <button class="copy-btn" data-copy="HOMEBREW_CASK_OPTS=--no-quarantine brew install --cask jpuritz/tap/claudar">copy</button>
       </div>
       <a class="alt-link" href="https://github.com/jpuritz/Claudar/releases/latest">or download the .zip</a>
     </div>
@@ -295,9 +295,9 @@
     <div class="install-cols">
       <div class="icol">
         <h3>homebrew · recommended</h3>
-        <pre><span class="p">$</span> brew install --cask --no-quarantine \
-    jpuritz/tap/claudar</pre>
-        <p>The <code>--no-quarantine</code> flag tells Gatekeeper to trust the ad-hoc signed app.</p>
+        <pre><span class="p">$</span> HOMEBREW_CASK_OPTS=--no-quarantine \
+    brew install --cask jpuritz/tap/claudar</pre>
+        <p>This tells Gatekeeper to trust the ad-hoc signed app. Homebrew 6 removed the <code>--no-quarantine</code> flag — passing it now fails with <code>invalid option</code> — but the same setting still works through <code>HOMEBREW_CASK_OPTS</code>, on old and new Homebrew alike. Prefer not to? Install plainly and run the <code>xattr</code> command opposite.</p>
       </div>
       <div class="icol">
         <h3>manual</h3>
