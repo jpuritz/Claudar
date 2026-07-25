@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claudar — radar for your Claude limits</title>
+<title>Claudar: radar for your Claude limits</title>
 <meta name="description" content="A free, open-source macOS menu bar app for your Claude usage limits. The same numbers as Claude Code's /usage, tracked live from the menu bar, a desktop widget, and a status window.">
 <link rel="canonical" href="https://claudarapp.com/">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -15,7 +15,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Claudar">
 <meta property="og:url" content="https://claudarapp.com/">
-<meta property="og:title" content="Claudar — radar for your Claude limits">
+<meta property="og:title" content="Claudar: radar for your Claude limits">
 <meta property="og:description" content="Track your Claude usage limits live from the macOS menu bar, a desktop widget, and a status window. Free, open source, no telemetry.">
 <meta property="og:image" content="https://claudarapp.com/og-card.png">
 <meta property="og:image:type" content="image/png">
@@ -23,7 +23,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Claudar's menu bar dropdown showing session, weekly, and extra usage meters, beside the words “Radar for your Claude limits.”">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Claudar — radar for your Claude limits">
+<meta name="twitter:title" content="Claudar: radar for your Claude limits">
 <meta name="twitter:description" content="Track your Claude usage limits live from the macOS menu bar, a desktop widget, and a status window. Free, open source, no telemetry.">
 <meta name="twitter:image" content="https://claudarapp.com/og-card.png">
 <style>
@@ -286,16 +286,16 @@ xattr -dr com.apple.quarantine /Applications/Claudar.app">copy</button>
 <section id="prompt">
   <div class="wrap">
     <h2>About that password prompt</h2>
-    <p class="sec-sub">Claudar works out of the box with your Claude Code CLI sign-in. There's one quirk worth knowing, and a one-click fix.</p>
+    <p class="sec-sub">Claudar works out of the box with your Claude Code CLI sign-in. One quirk comes with that, and a one-click fix.</p>
     <div class="modes">
       <div class="mode">
         <h3>cli mode · default</h3>
-        <p>Claudar reads the credential that belongs to the CLI. Because macOS guards another app's credential, it asks for your password to authorize access, and that authorization resets each time the CLI refreshes its token (a few times a day). So the prompt comes back periodically.</p>
-        <p>This is macOS protecting the CLI's credential, <b>not a bug</b>. The upside: zero setup and a narrow, CLI-scoped token.</p>
+        <p>Claudar reads the credential that belongs to the CLI. Because macOS guards another app's credential, it asks for your password to authorize access, and that authorization resets every time the CLI refreshes its token (a few times a day). So the prompt comes back periodically.</p>
+        <p>That's macOS doing its job, and nothing in Claudar can stop it. The upside: zero setup, and a token scoped to the CLI alone.</p>
       </div>
       <div class="mode">
         <h3>no-prompt mode · optional</h3>
-        <p>Turn on <b>No-Prompt Mode</b> (Menu → No-Prompt Mode → Sign In to claude.ai…). A sign-in window opens, you log in once, and Claudar stores the session in a Keychain item it owns. No DevTools, no terminal, no more prompts.</p>
+        <p>Turn on <b>No-Prompt Mode</b> (Menu → No-Prompt Mode → Sign In to claude.ai…). A sign-in window opens, you log in once, and Claudar stores the session in a Keychain item it owns. The prompts stop. No DevTools, no terminal.</p>
         <p>The claude.ai session is broader than the CLI token (sent only to claude.ai) and expires every few weeks, at which point you sign in again. Turn it off any time to go back to CLI mode.</p>
       </div>
     </div>
@@ -312,21 +312,21 @@ xattr -dr com.apple.quarantine /Applications/Claudar.app">copy</button>
         <pre><span class="p">$</span> brew install --cask jpuritz/tap/claudar
 <span class="p">$</span> xattr -dr com.apple.quarantine \
     /Applications/Claudar.app</pre>
-        <p>Two lines, no dialogs. The second one clears the download flag so Claudar opens straight away — <a href="#why-blocked">why that's needed</a>.</p>
+        <p>Two lines, no dialogs. The second one clears the download flag so Claudar opens straight away (<a href="#why-blocked">why that's needed</a>).</p>
       </div>
       <div class="icol">
         <h3>download · no terminal</h3>
         <ol class="steps">
           <li>Grab <code>Claudar-menubar.zip</code> from the <a href="https://github.com/jpuritz/Claudar/releases/latest">latest release</a> and unzip it.</li>
           <li>Drag <b>Claudar.app</b> into your <b>Applications</b> folder.</li>
-          <li>Double-click it. macOS will refuse to open it and say it can't verify the developer — that's expected, <a href="#why-blocked">here's why</a>.</li>
+          <li>Double-click it. macOS refuses to open it and says it can't verify the developer. That's expected (<a href="#why-blocked">why</a>).</li>
           <li>Open <b>System&nbsp;Settings ▸ Privacy&nbsp;&amp;&nbsp;Security</b>, scroll down to <b>Security</b>, and click <b>Open&nbsp;Anyway</b> next to Claudar. Confirm with Touch&nbsp;ID or your password.</li>
         </ol>
         <p>One time only. Claudar opens normally from then on.</p>
       </div>
     </div>
-    <p class="aside" id="why-blocked"><b>Why macOS blocks it the first time:</b> signing an app so macOS trusts it on sight costs $99/year through Apple's Developer Program. Claudar is free and MIT-licensed, so it isn't worth that — which means macOS treats it as unidentified and asks you to confirm once. Nothing about the app changes either way, and you can read every line of it or build it yourself from <a href="https://github.com/jpuritz/Claudar">source</a>.</p>
-    <p class="aside"><b>On first launch,</b> macOS asks to access <em>Claude Code-credentials</em>; click <b>Always Allow</b>. That's how the app reads your usage — or skip it entirely with <b>No-Prompt Mode</b> if you don't use the CLI. And if you want the desktop widget: the download and Homebrew builds are the menu bar + window version, so the widget builds from source (free, needs Xcode; see the <a href="https://github.com/jpuritz/Claudar/blob/main/docs/TECHNICAL.md#building-from-source">technical notes</a>).</p>
+    <p class="aside" id="why-blocked"><b>Why macOS blocks it the first time:</b> signing an app so macOS trusts it on sight costs $99/year through Apple's Developer Program. Claudar is free and MIT-licensed, so I don't pay it. macOS therefore treats the app as unidentified and asks you to confirm once. Nothing about the app itself changes either way, and you can read every line of it or build your own copy from <a href="https://github.com/jpuritz/Claudar">source</a>.</p>
+    <p class="aside"><b>On first launch,</b> macOS asks to access <em>Claude Code-credentials</em>; click <b>Always Allow</b>. That's how the app reads your usage, or skip it entirely with <b>No-Prompt Mode</b> if you don't use the CLI. And if you want the desktop widget: the download and Homebrew builds are the menu bar + window version, so you build the widget yourself (free, needs Xcode; see the <a href="https://github.com/jpuritz/Claudar/blob/main/docs/TECHNICAL.md#building-from-source">technical notes</a>).</p>
   </div>
 </section>
 
