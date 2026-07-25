@@ -20,24 +20,52 @@ if you don't use the CLI.
 
 ## Install
 
-**Homebrew** (recommended):
+### Homebrew — recommended
 
 ```sh
 brew install --cask jpuritz/tap/claudar
 xattr -dr com.apple.quarantine "/Applications/Claudar.app"
 ```
 
-**Or** download `Claudar-menubar.zip` from the
-[latest release](https://github.com/jpuritz/Claudar/releases/latest),
-unzip, drag **Claudar.app** to `/Applications`, then run that same `xattr`
-command once.
+Two lines, no dialogs. The second clears the download flag so Claudar opens
+straight away — see [why](#why-macos-blocks-it-the-first-time) below.
 
-*(The `xattr` line is needed because the app is ad-hoc signed — it tells
-Gatekeeper to trust it. Homebrew used to do this for you via
-`--no-quarantine`, but Homebrew 6 removed the flag: passing it now fails with
-`invalid option`, and `HOMEBREW_CASK_OPTS=--no-quarantine` no longer works
-either, because `brew install` stopped consulting it. Clearing the flag after
-installing is the route that actually works.)*
+### Download — no Terminal
+
+1. Grab `Claudar-menubar.zip` from the
+   [latest release](https://github.com/jpuritz/Claudar/releases/latest)
+   and unzip it.
+2. Drag **Claudar.app** into your **Applications** folder.
+3. Double-click it. macOS will refuse to open it and say it can't verify the
+   developer — that's expected, see below.
+4. Open **System Settings ▸ Privacy & Security**, scroll down to **Security**,
+   and click **Open Anyway** next to Claudar. Confirm with Touch ID or your
+   password.
+
+One time only. Claudar opens normally from then on.
+
+#### Why macOS blocks it the first time
+
+Signing an app so macOS trusts it on sight costs $99/year through Apple's
+Developer Program. Claudar is free and MIT-licensed, so it isn't worth that —
+which means macOS treats it as unidentified and asks you to confirm once.
+Nothing about the app changes either way, and you can read every line of it or
+build it yourself.
+
+<details>
+<summary>Why not <code>brew install --no-quarantine</code>?</summary>
+
+Homebrew used to clear the flag for you. Homebrew 6 removed the option:
+`--no-quarantine` now fails with `invalid option`, and
+`HOMEBREW_CASK_OPTS=--no-quarantine` doesn't work either — `brew install`
+builds its cask installer without passing `quarantine:` at all, so it always
+takes the default and never reads that setting. Clearing the flag afterwards
+is the only route left.
+
+Note also that Control-click ▸ **Open** no longer bypasses Gatekeeper: Apple
+removed that in macOS 15 Sequoia. System Settings is the way now.
+
+</details>
 
 **On first launch**, macOS asks to access *Claude Code-credentials* — click
 **Always Allow**. That's how the app reads your usage. No CLI? Skip that prompt

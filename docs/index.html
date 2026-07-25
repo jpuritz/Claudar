@@ -83,7 +83,8 @@
     padding: 13px 16px; border-radius: 6px;
   }
   .code-cta .lines { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
-  .code-cta .lines span { display:block; overflow-wrap:anywhere; }
+  /* Direct children only — the nested prompt span must stay inline. */
+  .code-cta .lines > span { display:block; overflow-wrap:anywhere; }
   .code-cta .p { color:#8CBF9D; user-select:none; }
   .copy-btn { background:none; border:1px solid rgba(255,255,255,.28); color:#EDEBE4; font-family:var(--mono); font-size:11px; border-radius:4px; padding:4px 9px; cursor:pointer; }
   .copy-btn:hover { border-color: rgba(255,255,255,.6); }
@@ -129,6 +130,13 @@
   .icol h3 { font-family: var(--mono); font-size: 13px; font-weight:500; color: var(--green); margin-bottom: 12px; }
   .icol p { font-family: var(--sans); font-size: 14.5px; color: var(--ink-soft); line-height:1.6; margin-top: 10px; }
   .icol p b { color: var(--ink); font-weight: 600; }
+  .steps {
+    font-family: var(--sans); font-size: 14.5px; color: var(--ink-soft);
+    line-height: 1.6; padding-left: 1.3em; margin: 0;
+  }
+  .steps li { margin-bottom: 9px; padding-left: 2px; }
+  .steps li::marker { color: var(--green); font-family: var(--mono); font-size: 12px; }
+  .steps b { color: var(--ink); font-weight: 600; }
   pre {
     background:#21201D; color:#EDEBE4; font-family: var(--mono); font-size: 13px; line-height:1.65;
     padding: 13px 16px; border-radius: 6px; overflow-x:auto;
@@ -209,7 +217,7 @@
         <button class="copy-btn" data-copy="brew install --cask jpuritz/tap/claudar
 xattr -dr com.apple.quarantine /Applications/Claudar.app">copy</button>
       </div>
-      <a class="alt-link" href="https://github.com/jpuritz/Claudar/releases/latest">or download the .zip</a>
+      <a class="alt-link" href="#install">or download it, no Terminal</a>
     </div>
     <p class="fine"><b>Unofficial:</b> not affiliated with Anthropic. Claudar reads <em>your</em> Claude sign-in from your Keychain, talks only to Anthropic's servers, and has no telemetry. Needs macOS 14+, an active Claude subscription, and either the <a href="https://code.claude.com">Claude Code CLI</a> signed in or a one-time claude.ai sign-in. MIT licensed.</p>
   </div>
@@ -297,22 +305,27 @@ xattr -dr com.apple.quarantine /Applications/Claudar.app">copy</button>
 <section id="install">
   <div class="wrap">
     <h2>Install</h2>
-    <p class="sec-sub">Running in about a minute either way.</p>
+    <p class="sec-sub">About a minute either way. Pick the one that matches how you like to work.</p>
     <div class="install-cols">
       <div class="icol">
         <h3>homebrew · recommended</h3>
         <pre><span class="p">$</span> brew install --cask jpuritz/tap/claudar
 <span class="p">$</span> xattr -dr com.apple.quarantine \
     /Applications/Claudar.app</pre>
-        <p>The second line is what lets the ad-hoc signed app launch. Homebrew 6 removed <code>--no-quarantine</code>: passing it now fails with <code>invalid option</code>, and <code>HOMEBREW_CASK_OPTS</code> is no longer read on the install path either, so clearing the flag afterwards is the reliable route.</p>
+        <p>Two lines, no dialogs. The second one clears the download flag so Claudar opens straight away — <a href="#why-blocked">why that's needed</a>.</p>
       </div>
       <div class="icol">
-        <h3>manual</h3>
-        <pre><span class="p">$</span> xattr -dr com.apple.quarantine \
-    "/Applications/Claudar.app"</pre>
-        <p>Grab <code>Claudar-menubar.zip</code> from the <a href="https://github.com/jpuritz/Claudar/releases/latest">latest release</a>, unzip, drag <b>Claudar.app</b> to <code>/Applications</code>, then run the command above once.</p>
+        <h3>download · no terminal</h3>
+        <ol class="steps">
+          <li>Grab <code>Claudar-menubar.zip</code> from the <a href="https://github.com/jpuritz/Claudar/releases/latest">latest release</a> and unzip it.</li>
+          <li>Drag <b>Claudar.app</b> into your <b>Applications</b> folder.</li>
+          <li>Double-click it. macOS will refuse to open it and say it can't verify the developer — that's expected, <a href="#why-blocked">here's why</a>.</li>
+          <li>Open <b>System&nbsp;Settings ▸ Privacy&nbsp;&amp;&nbsp;Security</b>, scroll down to <b>Security</b>, and click <b>Open&nbsp;Anyway</b> next to Claudar. Confirm with Touch&nbsp;ID or your password.</li>
+        </ol>
+        <p>One time only. Claudar opens normally from then on.</p>
       </div>
     </div>
+    <p class="aside" id="why-blocked"><b>Why macOS blocks it the first time:</b> signing an app so macOS trusts it on sight costs $99/year through Apple's Developer Program. Claudar is free and MIT-licensed, so it isn't worth that — which means macOS treats it as unidentified and asks you to confirm once. Nothing about the app changes either way, and you can read every line of it or build it yourself from <a href="https://github.com/jpuritz/Claudar">source</a>.</p>
     <p class="aside"><b>On first launch,</b> macOS asks to access <em>Claude Code-credentials</em>; click <b>Always Allow</b>. That's how the app reads your usage — or skip it entirely with <b>No-Prompt Mode</b> if you don't use the CLI. And if you want the desktop widget: the download and Homebrew builds are the menu bar + window version, so the widget builds from source (free, needs Xcode; see the <a href="https://github.com/jpuritz/Claudar/blob/main/docs/TECHNICAL.md#building-from-source">technical notes</a>).</p>
   </div>
 </section>
