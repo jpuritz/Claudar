@@ -1,7 +1,7 @@
 # Claudar
 
 > Watch your Claude usage limits from the macOS menu bar, a desktop widget, and
-> a status window. The same numbers as Claude Code's `/usage`, always in view.
+> a status window. The same numbers as Claude Code's `/usage`, always in view. 
 
 [![Downloads](https://img.shields.io/github/downloads/jpuritz/Claudar/total?label=downloads&color=brightgreen)](https://github.com/jpuritz/Claudar/releases)
 [![Latest release](https://img.shields.io/github/v/release/jpuritz/Claudar)](https://github.com/jpuritz/Claudar/releases/latest)
