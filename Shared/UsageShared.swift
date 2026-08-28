@@ -14,11 +14,25 @@ struct UsageLimit: Identifiable, Codable, Hashable {
     let resetsAt: Date?
 }
 
+/// One organization on a claude.ai login. A single account can belong to more
+/// than one (a personal org plus a team, say), and each carries its own plan and
+/// its own usage limits, so each is fetched separately.
+struct OrgInfo: Identifiable, Codable, Hashable {
+    let id: String          // the org uuid
+    let name: String
+    let plan: String?       // Pro / Max / Team / Enterprise, when the API says
+}
+
 /// What the host app hands to the widget through the App Group container.
 struct UsageSnapshot: Codable {
     var limits: [UsageLimit]
     var updated: Date
     var subscription: String?
+    /// The org these limits belong to, and whether there are others to switch
+    /// between. Both optional so a snapshot written by an older build still
+    /// decodes; the widget only shows the name when there's more than one org.
+    var orgName: String?
+    var orgCount: Int?
 
     /// The headline number: the 5-hour session window when present.
     var headline: UsageLimit? {
@@ -26,7 +40,12 @@ struct UsageSnapshot: Codable {
             ?? limits.max(by: { $0.utilization < $1.utilization })
     }
 
-    static let empty = UsageSnapshot(limits: [], updated: .distantPast, subscription: nil)
+    /// True when the user has more than one org, so labelling is worth the space.
+    var showsOrgName: Bool { (orgCount ?? 1) > 1 && !(orgName ?? "").isEmpty }
+
+    static let empty = UsageSnapshot(
+        limits: [], updated: .distantPast, subscription: nil, orgName: nil, orgCount: nil
+    )
 }
 
 // MARK: - App Group plumbing

@@ -7,8 +7,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.9.1"
-    CURRENT_PROJECT_VERSION: "4"
+    MARKETING_VERSION: "1.10"
+    CURRENT_PROJECT_VERSION: "5"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     # Set by build-widget.sh from your Xcode account, or export DEVELOPMENT_TEAM.

@@ -40,9 +40,15 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         // Low floor: the computed fit is the real driver, and a tall floor would
         // silently pad the window when there are few limits.
         window.minSize = NSSize(width: 260, height: 120)
+        // Scrollable because the all-orgs layout can outgrow the height ceiling
+        // below (three or more orgs), and clipping the bottom org would be worse
+        // than a scrollbar. With one org it never scrolls and looks unchanged.
         window.contentView = NSHostingView(
-            rootView: UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            rootView: ScrollView(.vertical) {
+                UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
+                    .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         )
         // Show on every Space — it's a reference window, not a document.
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -63,10 +69,12 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
                     guard let self else { return }
+                    let name = model.orgs.count > 1
+                        ? (model.activeOrg?.name ?? "Claudar") : "Claudar"
                     if let pct = model.menuBarUtilization {
-                        self.window.title = "Claudar — \(UsageFormat.percent(pct))"
+                        self.window.title = "\(name) · \(UsageFormat.percent(pct))"
                     } else {
-                        self.window.title = "Claudar"
+                        self.window.title = name
                     }
                     // If the window was opened before the first fetch landed, the
                     // row count just changed — re-fit unless the user has sized it.
@@ -103,23 +111,50 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         let width = window.contentView?.bounds.width ?? 300
 
         // Every number here comes from PanelMetrics, which UsagePanelView lays
-        // itself out with — so the two can't drift.
+        // itself out with, so the two can't drift.
         let padding = PanelMetrics.padding * 2
-        var blocks: [CGFloat] = []
+        var content: CGFloat = 0
 
-        if model.limits.isEmpty && model.errorMessage == nil {
-            blocks.append(PanelMetrics.loadingHeight)
+        if model.showsAllOrgs {
+            // Each org contributes a header plus its own rows, and the groups are
+            // separated by orgGroupSpacing rather than the usual stack spacing.
+            var groups: [CGFloat] = []
+            for org in model.orgs {
+                var blocks: [CGFloat] = [PanelMetrics.orgHeaderHeight]
+                let limits = model.limits(for: org.id)
+                if limits.isEmpty && model.error(for: org.id) == nil {
+                    blocks.append(PanelMetrics.loadingHeight)
+                }
+                for limit in limits {
+                    blocks.append(PanelMetrics.rowHeight(hasReset: limit.resetsAt != nil))
+                }
+                if model.error(for: org.id) != nil {
+                    blocks.append(PanelMetrics.errorHeight)
+                }
+                groups.append(
+                    blocks.reduce(0, +)
+                        + PanelMetrics.stackSpacing * CGFloat(max(0, blocks.count - 1))
+                )
+            }
+            content = groups.reduce(0, +)
+                + PanelMetrics.orgGroupSpacing * CGFloat(max(0, groups.count - 1))
+                + PanelMetrics.stackSpacing + PanelMetrics.footerHeight
+        } else {
+            var blocks: [CGFloat] = []
+            if model.limits.isEmpty && model.errorMessage == nil {
+                blocks.append(PanelMetrics.loadingHeight)
+            }
+            for limit in model.limits {
+                blocks.append(PanelMetrics.rowHeight(hasReset: limit.resetsAt != nil))
+            }
+            if model.errorMessage != nil {
+                blocks.append(PanelMetrics.errorHeight)
+            }
+            blocks.append(PanelMetrics.footerHeight)    // "Updated …" + plan badge
+            content = blocks.reduce(0, +)
+                + PanelMetrics.stackSpacing * CGFloat(max(0, blocks.count - 1))
         }
-        for limit in model.limits {
-            blocks.append(PanelMetrics.rowHeight(hasReset: limit.resetsAt != nil))
-        }
-        if model.errorMessage != nil {
-            blocks.append(PanelMetrics.errorHeight)
-        }
-        blocks.append(PanelMetrics.footerHeight)    // "Updated …" + plan badge
 
-        let content = blocks.reduce(0, +)
-            + PanelMetrics.stackSpacing * CGFloat(max(0, blocks.count - 1))
         let desired = padding + content + PanelMetrics.bottomBreathingRoom
 
         // Guard rails: never smaller than minSize, never a full-screen window.
@@ -129,6 +164,13 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
         window.setContentSize(NSSize(width: width, height: clamped))
         window.setFrameTopLeftPoint(topLeft)
+    }
+
+    /// Re-fits after something changed the panel's height wholesale, such as
+    /// switching the all-orgs layout on or off. Respects a size the user chose.
+    func refit() {
+        guard !hasUserFrame, window.isVisible else { return }
+        sizeToFitContent()
     }
 
     func hide() { window.orderOut(nil) }

@@ -4,10 +4,38 @@ import WidgetKit
 
 @MainActor
 final class UsageModel: ObservableObject {
+    /// The ACTIVE org's limits. Views bind to this and are unaware of the rest,
+    /// which keeps the menu, window, and widget code identical to single-org.
     @Published var limits: [UsageLimit] = []
     @Published var lastUpdated: Date?
     @Published var errorMessage: String?
     @Published var subscription: String?
+
+    /// Every org on the current claude.ai login. Empty in CLI mode, and of
+    /// length 1 for almost everyone, in which case no switcher is shown.
+    @Published var orgs: [OrgInfo] = []
+    /// Latest limits for every org, so the switcher can show each one's session
+    /// percentage without making the user switch to find out.
+    @Published var orgUsage: [String: [UsageLimit]] = [:]
+    private var orgErrors: [String: String] = [:]
+
+    /// Show every org's limits together rather than only the active one. Mirrored
+    /// into Prefs on write, and published rather than read straight from Prefs so
+    /// that the usage window, whose hosting view outlives the menu, re-renders the
+    /// moment it's toggled.
+    @Published var showAllOrgs: Bool = Prefs.showAllOrgs {
+        didSet { Prefs.showAllOrgs = showAllOrgs }
+    }
+
+    /// True when the panel should render org-by-org. One org has nothing to
+    /// separate, so the setting is ignored there.
+    var showsAllOrgs: Bool { showAllOrgs && orgs.count > 1 }
+
+    /// Limits for one org, for the grouped layout.
+    func limits(for orgID: String) -> [UsageLimit] { orgUsage[orgID] ?? [] }
+
+    /// Per-org error, so a group that failed can say so without blanking the rest.
+    func error(for orgID: String) -> String? { orgErrors[orgID] }
 
     private var inFlight = false
     private var nextAttemptAllowed = Date.distantPast
@@ -21,6 +49,47 @@ final class UsageModel: ObservableObject {
     var menuBarUtilization: Double? {
         limits.first(where: { $0.id == "five_hour" })?.utilization
             ?? limits.map(\.utilization).max()
+    }
+
+    // MARK: - Active org
+
+    private static let activeOrgKey = "ClaudeActiveOrgID"
+    private static let orgListKey = "ClaudeOrgList"
+    private static let orgListStampKey = "ClaudeOrgListFetchedAt"
+    /// Orgs change about never, so the list is cached and only re-read
+    /// occasionally. A cookie change clears it outright.
+    private static let orgListTTL: TimeInterval = 6 * 3600
+
+    /// The org the menu bar, window, and widget are showing. Falls back to the
+    /// first org whenever the stored choice is missing or no longer on the login.
+    var activeOrg: OrgInfo? {
+        let stored = UserDefaults.standard.string(forKey: Self.activeOrgKey)
+        return orgs.first { $0.id == stored } ?? orgs.first
+    }
+
+    /// The session percentage for one org, for the switcher rows.
+    func sessionPercent(for orgID: String) -> Double? {
+        let limits = orgUsage[orgID] ?? []
+        return limits.first(where: { $0.id == "five_hour" })?.utilization
+            ?? limits.map(\.utilization).max()
+    }
+
+    func selectOrg(_ id: String) {
+        guard id != activeOrg?.id, orgs.contains(where: { $0.id == id }) else { return }
+        UserDefaults.standard.set(id, forKey: Self.activeOrgKey)
+        // Swap the visible numbers over at once from what's already cached, then
+        // refresh so the new org's data is current.
+        applyActiveOrg()
+        refresh(force: true)
+    }
+
+    /// Points the published, view-facing properties at the active org.
+    private func applyActiveOrg(fallbackError: String? = nil) {
+        guard let org = activeOrg else { return }
+        limits = orgUsage[org.id] ?? []
+        subscription = org.plan
+        errorMessage = orgErrors[org.id] ?? fallbackError
+        publishToWidget(limits)
     }
 
     func refresh(force: Bool = false) {
@@ -38,7 +107,8 @@ final class UsageModel: ObservableObject {
     /// the shared App Group container and asks WidgetKit to reload.
     private func publishToWidget(_ limits: [UsageLimit]) {
         SharedStore.write(UsageSnapshot(
-            limits: limits, updated: Date(), subscription: subscription
+            limits: limits, updated: Date(), subscription: subscription,
+            orgName: activeOrg?.name, orgCount: orgs.isEmpty ? nil : orgs.count
         ))
         WidgetCenter.shared.reloadAllTimelines()
     }
@@ -49,6 +119,12 @@ final class UsageModel: ObservableObject {
     func cookieDidChange() {
         UserDefaults.standard.removeObject(forKey: Self.orgIDKey)
         UserDefaults.standard.removeObject(forKey: Self.planKey)
+        UserDefaults.standard.removeObject(forKey: Self.orgListKey)
+        UserDefaults.standard.removeObject(forKey: Self.orgListStampKey)
+        UserDefaults.standard.removeObject(forKey: Self.activeOrgKey)
+        orgs = []
+        orgUsage = [:]
+        orgErrors = [:]
         subscription = nil
         refresh(force: true)
     }
@@ -94,36 +170,95 @@ final class UsageModel: ObservableObject {
         return req
     }
 
-    /// Resolves (and caches) the organization UUID and plan label. Both are
-    /// cached in UserDefaults, so the extra lookup happens at most once — the
-    /// org alone is usually in the cookie, but the plan only comes from the API.
-    private func resolveOrgInfo(cookie: String) async -> (org: String, plan: String?)? {
-        let cachedOrg = UserDefaults.standard.string(forKey: Self.orgIDKey)
-        let cachedPlan = UserDefaults.standard.string(forKey: Self.planKey)
-        if let cachedOrg, !cachedOrg.isEmpty, cachedPlan != nil {
-            return (cachedOrg, cachedPlan)
+    /// Resolves every org on the login, cached in UserDefaults so the extra
+    /// lookup happens rarely rather than on every poll.
+    ///
+    /// A login can belong to more than one org, and the old code took only the
+    /// first, which silently hid the rest. Failure degrades in stages: a stale
+    /// cache beats nothing, and the `lastActiveOrg` in the cookie beats that.
+    private func resolveOrgs(cookie: String) async -> [OrgInfo] {
+        func cached() -> [OrgInfo] {
+            guard let data = UserDefaults.standard.data(forKey: Self.orgListKey),
+                  let list = try? JSONDecoder().decode([OrgInfo].self, from: data)
+            else { return [] }
+            return list
         }
 
-        // One lookup gets both the uuid and the plan capabilities.
+        let stamp = UserDefaults.standard.object(forKey: Self.orgListStampKey) as? Date
+        let fresh = Date().timeIntervalSince(stamp ?? .distantPast) < Self.orgListTTL
+        let cache = cached()
+        if fresh, !cache.isEmpty { return cache }
+
         let req = Self.browserRequest(URL(string: "https://claude.ai/api/organizations")!,
                                       cookie: cookie)
         if let (data, resp) = try? await URLSession.shared.data(for: req),
-           (resp as? HTTPURLResponse)?.statusCode == 200,
-           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-           let org = arr.first {
-            let uuid = (org["uuid"] as? String) ?? cachedOrg ?? UsageParser.orgID(fromCookie: cookie)
-            let plan = UsageParser.planLabel(from: org["capabilities"] as? [String] ?? [])
-            if let uuid { UserDefaults.standard.set(uuid, forKey: Self.orgIDKey) }
-            if let plan { UserDefaults.standard.set(plan, forKey: Self.planKey) }
-            if let uuid { return (uuid, plan ?? cachedPlan) }
+           (resp as? HTTPURLResponse)?.statusCode == 200 {
+            let parsed = UsageParser.organizations(from: data)
+            if !parsed.isEmpty {
+                if let encoded = try? JSONEncoder().encode(parsed) {
+                    UserDefaults.standard.set(encoded, forKey: Self.orgListKey)
+                    UserDefaults.standard.set(Date(), forKey: Self.orgListStampKey)
+                }
+                return parsed
+            }
         }
 
-        // Lookup failed — fall back to the org embedded in the cookie.
-        if let org = cachedOrg ?? UsageParser.orgID(fromCookie: cookie), !org.isEmpty {
-            UserDefaults.standard.set(org, forKey: Self.orgIDKey)
-            return (org, cachedPlan)
+        if !cache.isEmpty { return cache }
+        if let id = UsageParser.orgID(fromCookie: cookie), !id.isEmpty {
+            return [OrgInfo(id: id, name: "Your organization", plan: nil)]
         }
-        return nil
+        return []
+    }
+
+    /// What one org's usage call produced.
+    private enum OrgFetch {
+        case success([UsageLimit])
+        /// Rate limited. The caller stops immediately: every org shares one host
+        /// and one session, so hammering the rest would only dig in deeper.
+        case rateLimited(Double?)
+        case failure(String)
+    }
+
+    private func fetchOrgUsage(_ org: OrgInfo, cookie: String) async -> OrgFetch {
+        let url = URL(string: "https://claude.ai/api/organizations/\(org.id)/usage")!
+        let req = Self.browserRequest(url, cookie: cookie)
+
+        let data: Data, http: HTTPURLResponse
+        do {
+            let (d, resp) = try await URLSession.shared.data(for: req)
+            guard let h = resp as? HTTPURLResponse else {
+                return .failure("No response from claude.ai.")
+            }
+            data = d; http = h
+        } catch {
+            return .failure("Network error: \(error.localizedDescription)")
+        }
+
+        switch http.statusCode {
+        case 200:
+            let parsed = UsageParser.limits(from: data)
+            return parsed.isEmpty
+                ? .failure("Usage response had no limit data.")
+                : .success(parsed)
+        case 401:
+            return .failure("claude.ai session expired — sign in again from No-Prompt Mode.")
+        case 403:
+            // Cloudflare serves an HTML challenge when cf_clearance goes stale.
+            // A 403 on one org of several is more likely to mean this login can't
+            // read that org's usage at all, which is worth saying plainly.
+            let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
+            if body.contains("Just a moment") {
+                return .failure("Cloudflare challenge — your cf_clearance cookie expired; sign in again.")
+            }
+            Self.appendLog("cookie mode HTTP 403 for org \(org.id)")
+            return .failure("claude.ai won't share usage for \(org.name).")
+        case 429:
+            let ra = http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
+            return .rateLimited(ra)
+        default:
+            Self.appendLog("cookie mode HTTP \(http.statusCode) for org \(org.id)")
+            return .failure("claude.ai returned HTTP \(http.statusCode).")
+        }
     }
 
     /// Picks the access token to use, minimizing reads of Claude Code's Keychain
@@ -270,49 +405,72 @@ final class UsageModel: ObservableObject {
         await fetchViaBearer()
     }
 
-    /// claude.ai path — same limit fields as the OAuth endpoint, so the existing
-    /// parser handles the response unchanged.
+    /// claude.ai path. Same limit fields as the OAuth endpoint, so the parser is
+    /// shared. Every org is polled each cycle, because notifications for an org
+    /// you aren't currently looking at are the main reason to have more than one.
     private func fetchViaCookie(_ cookie: String) async {
-        guard let info = await resolveOrgInfo(cookie: cookie) else {
+        let resolved = await resolveOrgs(cookie: cookie)
+        guard !resolved.isEmpty else {
             errorMessage = "Couldn't determine your organization from the saved cookie."
             return
         }
-        if let plan = info.plan { subscription = plan }
-        let url = URL(string: "https://claude.ai/api/organizations/\(info.org)/usage")!
-        let req = Self.browserRequest(url, cookie: cookie)
+        orgs = resolved
+        let multi = resolved.count > 1
 
-        let data: Data, http: HTTPURLResponse
-        do {
-            let (d, resp) = try await URLSession.shared.data(for: req)
-            guard let h = resp as? HTTPURLResponse else { return }
-            data = d; http = h
-        } catch {
-            errorMessage = "Network error: \(error.localizedDescription)"
-            return
+        var anySucceeded = false
+        var firstError: String?
+        var throttled: (hit: Bool, retryAfter: Double?) = (false, nil)
+
+        for org in resolved {
+            switch await fetchOrgUsage(org, cookie: cookie) {
+            case .success(let limits):
+                anySucceeded = true
+                let previous = orgUsage[org.id] ?? []
+                orgUsage[org.id] = limits
+                orgErrors[org.id] = nil
+                AlertEngine.shared.evaluate(
+                    previous: previous, current: limits,
+                    scope: org.id, orgLabel: multi ? org.name : nil
+                )
+            case .rateLimited(let retryAfter):
+                // Every org shares one host and one session, so once we're
+                // throttled the rest of the loop would only dig in deeper. Stop,
+                // but keep whatever already came back this cycle.
+                throttled = (true, retryAfter)
+            case .failure(let message):
+                orgErrors[org.id] = message
+                if firstError == nil { firstError = message }
+            }
+            if throttled.hit { break }
         }
 
-        switch http.statusCode {
-        case 200:
-            applySuccess(data)
-        case 401:
-            errorMessage = "claude.ai session expired — sign in again from No-Prompt Mode."
-        case 403:
-            // Cloudflare serves an HTML challenge when cf_clearance goes stale.
-            let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
-            errorMessage = body.contains("Just a moment")
-                ? "Cloudflare challenge — your cf_clearance cookie expired; re-copy your Cookie."
-                : "claude.ai refused the request (403)."
-            Self.appendLog("cookie mode HTTP 403")
-        case 429:
-            let ra = http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
-            applyBackoff(retryAfter: ra, source: "claude.ai")
-        default:
-            errorMessage = "claude.ai returned HTTP \(http.statusCode)."
-            Self.appendLog("cookie mode HTTP \(http.statusCode)")
+        if anySucceeded {
+            lastUpdated = Date()
+            if !throttled.hit {
+                consecutive429s = 0
+                nextAttemptAllowed = .distantPast
+            }
+        }
+        if throttled.hit {
+            applyBackoff(retryAfter: throttled.retryAfter, source: "claude.ai")
+            // applyBackoff owns errorMessage here; don't let the active org
+            // overwrite it with a stale per-org message.
+            let saved = errorMessage
+            applyActiveOrg()
+            errorMessage = saved
+        } else {
+            applyActiveOrg(fallbackError: anySucceeded ? nil : firstError)
         }
     }
 
     private func fetchViaBearer() async {
+        // CLI mode has no org concept: the token itself picks the account. Drop
+        // any org list left over from cookie mode so nothing gets mislabelled.
+        if !orgs.isEmpty {
+            orgs = []
+            orgUsage = [:]
+            orgErrors = [:]
+        }
         let accessToken: String
         var usingCustomToken = false
         do {

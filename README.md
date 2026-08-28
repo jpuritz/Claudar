@@ -89,6 +89,10 @@ and use **No-Prompt Mode → Sign In to claude.ai…** from the menu instead.
   warnings, and service up/down alerts. Each toggleable.
 - **Global shortcut** (⌘⇧C) opens the window from anywhere, no extra permissions.
 - **Configurable refresh** (15 s to 2 min), plus an instant refresh on wake.
+- **Multiple organizations:** if your claude.ai login belongs to more than one
+  org, each gets its own limits, plan badge, and alerts. Switch which one the
+  menu bar follows, or show them all together
+  ([below](#multiple-organizations)).
 - **No-Prompt Mode:** sign in to claude.ai once to stop the periodic macOS
   password prompt (see [below](#sign-in-and-the-password-prompt)).
 
@@ -104,12 +108,37 @@ and use **No-Prompt Mode → Sign In to claude.ai…** from the menu instead.
 - **Refresh Now** (⌘R while the menu is open)
 - **Usage Window** (⌘W): show/hide the detail window
 - **Keep Window on Top**
+- **Organization:** pick which org the menu bar follows, or **Show All at Once**
+  (appears only when your login has more than one)
 - **Notifications:** thresholds, resets, pace warnings, service alerts
 - **Refresh Interval:** 15 s / 30 s / 1 min / 2 min
 - **Global Shortcut (⌘⇧C)**, off by default
 - **No-Prompt Mode:** sign in to claude.ai to stop the password prompt
 - **Launch at Login**
 - **Quit**
+
+## Multiple organizations
+
+Some claude.ai logins belong to more than one org: a personal one plus a team,
+say. Each org carries its own limits, its own plan, and its own reset windows.
+Claudar polls all of them every cycle and gives you two ways to read the result.
+
+**One at a time.** The ring, panel, window, and widget follow a single active
+org. The **Organization** section of the menu lists the others with their
+session percentages, so you can see where everything stands without switching.
+Click one to switch.
+
+**All at once.** Tick **Organization → Show All at Once** and the panel lists
+every org together, each with its own name, plan badge, and limits. The menu bar
+keeps following whichever org is checked, and a small dot marks that org in the
+panel so the two agree.
+
+Alerts fire for every org either way, prefixed with the org name so you know
+which one crossed 80%.
+
+Orgs come from your claude.ai login, so this needs **No-Prompt Mode**. CLI mode
+has no org to choose: the token itself picks the account. With a single org
+nothing changes and no switcher appears.
 
 ## Sign-in and the password prompt
 

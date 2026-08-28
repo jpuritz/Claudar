@@ -188,6 +188,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panelItem.view = hosting
         menu.addItem(panelItem)
 
+        // Organization switcher. Only drawn when the login actually has more than
+        // one org, so the common single-org menu is unchanged.
+        if model.orgs.count > 1 {
+            menu.addItem(.separator())
+            let header = NSMenuItem(title: "Organization", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+
+            let showAll = NSMenuItem(
+                title: "Show All at Once",
+                action: #selector(toggleShowAllOrgs), keyEquivalent: ""
+            )
+            showAll.target = self
+            showAll.state = model.showAllOrgs ? .on : .off
+            showAll.toolTip = "List every org's limits together instead of only the active one."
+            menu.addItem(showAll)
+
+            let activeID = model.activeOrg?.id
+            for org in model.orgs {
+                let pct = model.sessionPercent(for: org.id)
+                let item = NSMenuItem(
+                    title: pct.map { "\(org.name) · \(UsageFormat.percent($0))" } ?? org.name,
+                    action: #selector(selectOrg(_:)), keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = org.id
+                item.state = (org.id == activeID) ? .on : .off
+                let plan = org.plan.map { " · \($0)" } ?? ""
+                item.toolTip = model.showAllOrgs
+                    ? "\(org.name)\(plan). Checked means the menu bar ring follows this org."
+                    : "\(org.name)\(plan)"
+                menu.addItem(item)
+            }
+        }
+
         menu.addItem(.separator())
 
         // Claude service health — a single summary line, colored.
@@ -337,6 +372,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return s
     }
 
+    @objc private func toggleShowAllOrgs() {
+        model.showAllOrgs.toggle()
+        // The panel's height changes a lot here, so let the window re-fit.
+        usageWindow.refit()
+    }
+
+    @objc private func selectOrg(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        model.selectOrg(id)
+    }
+
     @objc private func openStatusPage() {
         NSWorkspace.shared.open(URL(string: "https://status.claude.com")!)
     }
@@ -376,11 +422,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "thresholds": Prefs.notifyThresholds.toggle()
         case "resets":
             Prefs.notifyResets.toggle()
-            if !Prefs.notifyResets {
-                NotificationManager.shared.cancel(
-                    ids: model.limits.map { "resetsched-\($0.id)" }
-                )
-            }
+            // Cancel across every org, not just the one on screen.
+            if !Prefs.notifyResets { AlertEngine.shared.cancelAllResetSchedules() }
         case "status": Prefs.notifyStatus.toggle()
         default: Prefs.notifyPace.toggle()
         }

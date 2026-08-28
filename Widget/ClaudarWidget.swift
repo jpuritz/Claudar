@@ -17,7 +17,7 @@ struct UsageProvider: TimelineProvider {
                 UsageLimit(id: "seven_day", label: "Weekly · all models",
                            utilization: 18, resetsAt: nil),
             ],
-            updated: Date(), subscription: "pro"
+            updated: Date(), subscription: "pro", orgName: nil, orgCount: nil
         ))
     }
 
@@ -155,9 +155,12 @@ struct MediumUsageView: View {
                     ForEach(snapshot.limits.prefix(4)) { limit in
                         LimitBar(limit: limit)
                     }
-                    Text("Updated \(UsageFormat.staleString(snapshot.updated))")
+                    Text(snapshot.showsOrgName
+                         ? "\(snapshot.orgName ?? "") · \(UsageFormat.staleString(snapshot.updated))"
+                         : "Updated \(UsageFormat.staleString(snapshot.updated))")
                         .font(.system(size: 8))
                         .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
         } else {
@@ -173,8 +176,9 @@ struct LargeUsageView: View {
         if let headline = snapshot.headline {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Claudar")
+                    Text(snapshot.showsOrgName ? (snapshot.orgName ?? "Claudar") : "Claudar")
                         .font(.system(size: 13, weight: .bold))
+                        .lineLimit(1)
                     Spacer()
                     if let sub = snapshot.subscription, !sub.isEmpty {
                         Text(sub.capitalized)

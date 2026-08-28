@@ -70,6 +70,33 @@ enum UsageParser {
 
     // MARK: - claude.ai org & plan
 
+    /// Parses `/api/organizations` into every org on the login, in the order the
+    /// API returns them.
+    ///
+    /// A login can belong to several orgs (a personal one plus a team), each with
+    /// its own plan and its own usage. Entries with no uuid are unusable, so they
+    /// are skipped; duplicates are collapsed; an entry with no name falls back to
+    /// a short form of its uuid so the switcher always has a label to show.
+    static func organizations(from data: Data) -> [OrgInfo] {
+        guard let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return []
+        }
+        var seen = Set<String>()
+        var orgs: [OrgInfo] = []
+        for entry in arr {
+            guard let uuid = entry["uuid"] as? String, !uuid.isEmpty,
+                  seen.insert(uuid).inserted else { continue }
+            let trimmed = (entry["name"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            orgs.append(OrgInfo(
+                id: uuid,
+                name: trimmed.isEmpty ? "Org \(uuid.prefix(8))" : trimmed,
+                plan: planLabel(from: entry["capabilities"] as? [String] ?? [])
+            ))
+        }
+        return orgs
+    }
+
     /// claude.ai reports the plan as an org capability, e.g. ["claude_pro", "chat"].
     static func planLabel(from capabilities: [String]) -> String? {
         if capabilities.contains("claude_max") { return "Max" }

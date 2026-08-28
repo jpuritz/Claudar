@@ -165,3 +165,90 @@ final class UsageParserTests: XCTestCase {
         XCTAssertNil(UsageParser.orgID(fromCookie: "notLastActiveOrgReally=nope"))
     }
 }
+
+/// Multi-org support hangs entirely off `/api/organizations`, and a login with
+/// two orgs is exactly the case that used to be silently truncated to the first.
+final class OrganizationParsingTests: XCTestCase {
+
+    private func json(_ s: String) -> Data { Data(s.utf8) }
+
+    func testReturnsEveryOrgInAPIOrder() {
+        let data = json("""
+        [
+          {"uuid": "aaa", "name": "Jon Puritz", "capabilities": ["chat", "claude_max"]},
+          {"uuid": "bbb", "name": "Marine Evo Eco Lab", "capabilities": ["claude_team"]}
+        ]
+        """)
+        let orgs = UsageParser.organizations(from: data)
+
+        XCTAssertEqual(orgs.map(\.id), ["aaa", "bbb"])
+        XCTAssertEqual(orgs.map(\.name), ["Jon Puritz", "Marine Evo Eco Lab"])
+        XCTAssertEqual(orgs.map(\.plan), ["Max", "Team"])
+    }
+
+    func testPlanIsResolvedPerOrgNotGlobally() {
+        // The whole point of showing a badge per row: one login, two plans.
+        let data = json("""
+        [ {"uuid": "a", "name": "Personal", "capabilities": ["claude_pro"]},
+          {"uuid": "b", "name": "Work", "capabilities": ["claude_enterprise"]} ]
+        """)
+        let byID = Dictionary(uniqueKeysWithValues: UsageParser.organizations(from: data).map { ($0.id, $0) })
+
+        XCTAssertEqual(byID["a"]?.plan, "Pro")
+        XCTAssertEqual(byID["b"]?.plan, "Enterprise")
+    }
+
+    func testSkipsEntriesWithNoUsableUUID() {
+        let data = json("""
+        [ {"name": "No uuid at all"},
+          {"uuid": "", "name": "Empty uuid"},
+          {"uuid": "good", "name": "Fine"} ]
+        """)
+        XCTAssertEqual(UsageParser.organizations(from: data).map(\.id), ["good"])
+    }
+
+    func testCollapsesDuplicateOrgs() {
+        // A repeated uuid would otherwise produce two identical switcher rows.
+        let data = json("""
+        [ {"uuid": "dup", "name": "First"}, {"uuid": "dup", "name": "Second"} ]
+        """)
+        let orgs = UsageParser.organizations(from: data)
+
+        XCTAssertEqual(orgs.count, 1)
+        XCTAssertEqual(orgs.first?.name, "First", "the first spelling wins")
+    }
+
+    func testFallsBackToAUUIDStubWhenNameIsMissingOrBlank() {
+        // Never leave a switcher row with an empty label.
+        let data = json("""
+        [ {"uuid": "0123456789abcdef"}, {"uuid": "fedcba9876543210", "name": "   "} ]
+        """)
+        let orgs = UsageParser.organizations(from: data)
+
+        XCTAssertEqual(orgs[0].name, "Org 01234567")
+        XCTAssertEqual(orgs[1].name, "Org fedcba98")
+    }
+
+    func testTrimsSurroundingWhitespaceInNames() {
+        let data = json(#"[ {"uuid": "a", "name": "  Spaced Out  "} ]"#)
+        XCTAssertEqual(UsageParser.organizations(from: data).first?.name, "Spaced Out")
+    }
+
+    func testPlanIsNilRatherThanInventedWhenCapabilitiesAreMissing() {
+        let data = json(#"[ {"uuid": "a", "name": "Plain"} ]"#)
+        XCTAssertNil(UsageParser.organizations(from: data).first?.plan)
+    }
+
+    func testReturnsEmptyOnJunkOrUnexpectedShapes() {
+        XCTAssertTrue(UsageParser.organizations(from: json("not json")).isEmpty)
+        XCTAssertTrue(UsageParser.organizations(from: json("{}")).isEmpty, "an object, not an array")
+        XCTAssertTrue(UsageParser.organizations(from: json("[]")).isEmpty)
+        XCTAssertTrue(UsageParser.organizations(from: Data()).isEmpty)
+    }
+
+    func testSingleOrgStillParsesAsOne() {
+        // The overwhelmingly common case must keep working unchanged.
+        let data = json(#"[ {"uuid": "solo", "name": "Me", "capabilities": ["claude_pro"]} ]"#)
+        XCTAssertEqual(UsageParser.organizations(from: data), [OrgInfo(id: "solo", name: "Me", plan: "Pro")])
+    }
+}

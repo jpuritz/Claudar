@@ -55,11 +55,17 @@ Mode → Sign In). The WebView is given the same `User-Agent` as the fetch, so t
 On success the app harvests all `claude.ai` cookies from the WebView's store and
 writes them to the Keychain. (A manual path via `set-cookie.command` also exists.)
 
-- The org UUID comes from the cookie's `lastActiveOrg`, with a
-  `/api/organizations` lookup as fallback. Org and plan are cached in
-  UserDefaults, so the extra lookup happens at most once.
-- The plan badge (Pro / Max / Team / Enterprise) is derived from the org's
-  `capabilities` array.
+- `/api/organizations` lists every org on the login, and usage is fetched for
+  each one on every poll. The list is cached in UserDefaults for six hours; a
+  cookie change clears it. When the lookup fails it degrades to a stale cache,
+  then to the `lastActiveOrg` carried in the cookie itself.
+- The plan badge (Pro / Max / Team / Enterprise) comes from each org's
+  `capabilities` array, so two orgs on one login can show different plans.
+- One org failing leaves the others alone: it keeps its own error message while
+  the rest still update. A 429 ends the loop for that cycle, because every org
+  shares one host and one session, so continuing would only dig in deeper.
+- Only cookie mode has orgs. The OAuth endpoint behind CLI mode is scoped by the
+  token, so there is nothing to enumerate or switch between.
 - **Cloudflare:** claude.ai sits behind Cloudflare, which serves a challenge page
   (HTTP 403 "Just a moment…") to non-browser clients. `URLSession` passes;
   `curl` and Python both fail. So cookie mode always uses `URLSession` and never
@@ -134,7 +140,9 @@ Other details:
   and an `NSColor` from the same RGB triple. The menu bar ring and the panel
   bars used to carry separate palettes and never quite matched.
 - Notification state (which thresholds have fired, whether a pace warning went
-  out) is persisted per limit, keyed on the limit's `resets_at`. A window the
+  out) is persisted per org and per limit, keyed on the limit's `resets_at`.
+  Two orgs each have their own five-hour window, and crossing 80% in one says
+  nothing about the other. A window the
   app has no record of seeds its already-crossed thresholds *without* notifying:
   you cannot cross a line the app never watched you cross. That is what stops a
   relaunch at 85% (every login, with Launch at Login on) from re-announcing 80%.
