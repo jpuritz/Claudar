@@ -83,6 +83,9 @@ and use **No-Prompt Mode → Sign In to claude.ai…** from the menu instead.
   system widget gallery.
 - **Usage window:** the full breakdown in a normal window. Resizable, remembers
   its position, can float on top.
+- **Per-model limits:** weekly limits scoped to a single model (Fable, Opus,
+  Sonnet) show up alongside the all-models total whenever your plan reports
+  them, named the same way Claude Code names them.
 - **Live Claude service status:** a colored line in the menu and a dot on the
   ring when claude.ai, the API, Claude Code, or the Console has an incident.
 - **Notifications:** 80% / 95% thresholds, reset alerts, "on pace to run out"

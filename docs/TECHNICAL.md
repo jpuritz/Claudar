@@ -66,6 +66,22 @@ writes them to the Keychain. (A manual path via `set-cookie.command` also exists
   shares one host and one session, so continuing would only dig in deeper.
 - Only cookie mode has orgs. The OAuth endpoint behind CLI mode is scoped by the
   token, so there is nothing to enumerate or switch between.
+- **Two shapes in one response.** The payload carries legacy top-level keys
+  (`five_hour`, `seven_day`, `extra_usage`) *and* a newer `limits` array, which
+  is what Claude Code renders. Per-model limits appear only in the array, as
+  `kind: "weekly_scoped"` with the model at `scope.model.display_name`, and it
+  uses `percent` where the top level uses `utilization`. Claudar reads the array
+  when it's there and maps it onto the existing ids (`session` → `five_hour`,
+  `weekly_all` → `seven_day`, scoped → `seven_day_<model>`), so the menu bar's
+  session lookup and saved notification state keep working. Top-level keys merge
+  in for anything the array misses, which is how `extra_usage` survives. With no
+  array it falls back to scanning for `utilization` as before.
+- **Codename keys.** The same response carries internal placeholders
+  (`nimbus_quill`, `amber_ladder`, `juniper_tide`, `tangelo`, …), mostly null and
+  otherwise at 0% with no reset time. Claude Code doesn't show them, so neither
+  does Claudar once the array has spoken. A Fable limit at 100% was invisible for
+  a while precisely because the array was being skipped and one of these was
+  showing in its place.
 - **Cloudflare:** claude.ai sits behind Cloudflare, which serves a challenge page
   (HTTP 403 "Just a moment…") to non-browser clients. `URLSession` passes;
   `curl` and Python both fail. So cookie mode always uses `URLSession` and never
@@ -103,6 +119,23 @@ Documented so you don't repeat them:
 - **Timezone gotcha when debugging:** the Keychain's `expiresAt` is a Unix
   timestamp most tooling renders in *local* time. Print both zones when comparing
   against expiry, or you'll chase failures that haven't happened yet.
+
+## When a limit doesn't show up
+
+The payload shape changes without notice, so there's a switch for inspecting it:
+
+```sh
+defaults write com.jpuritz.claudar LogPayloadShape -bool true
+```
+
+Claudar then writes the shape of each usage response to
+`~/Library/Logs/Claudar-last-error.txt`: key paths, which of them carry a
+utilization, numbers, and short strings. Long strings are elided so account
+identifiers stay out of the log. Turn it off with `-bool false`.
+
+This is how the `limits` array was found. A Fable limit was showing in Claude
+Code at 100% and nowhere in Claudar, because the parser recursed into
+dictionaries but walked straight past arrays.
 
 ## Architecture
 

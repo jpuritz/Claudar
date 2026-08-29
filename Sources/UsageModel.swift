@@ -140,6 +140,19 @@ final class UsageModel: ObservableObject {
     nonisolated private static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let preferCurlKey = "PreferCurlTransport"
 
+    /// Off by default. Turn on to log the shape of the usage payload when a limit
+    /// you can see in Claude Code doesn't appear here, which is how the `limits`
+    /// array was found:
+    ///
+    ///     defaults write com.jpuritz.claudar LogPayloadShape -bool true
+    ///
+    /// Logs key paths, numbers, and short strings to
+    /// ~/Library/Logs/Claudar-last-error.txt. Long strings are elided so account
+    /// identifiers stay out of it.
+    static var logsPayloadShape: Bool {
+        UserDefaults.standard.bool(forKey: "LogPayloadShape")
+    }
+
     private struct ResolvedToken {
         let token: String
         let isCustom: Bool
@@ -236,6 +249,9 @@ final class UsageModel: ObservableObject {
 
         switch http.statusCode {
         case 200:
+            if Self.logsPayloadShape {
+                Self.appendLog("cookie payload for \(org.name):\n" + UsageParser.debugShape(data))
+            }
             let parsed = UsageParser.limits(from: data)
             return parsed.isEmpty
                 ? .failure("Usage response had no limit data.")
@@ -365,6 +381,9 @@ final class UsageModel: ObservableObject {
     /// Commits a successful payload: publishes it, clears backoff, and lets the
     /// alert engine compare it against the previous reading.
     private func applySuccess(_ body: Data) {
+        if Self.logsPayloadShape {
+            Self.appendLog("bearer payload:\n" + UsageParser.debugShape(body))
+        }
         let parsed = UsageParser.limits(from: body)
         guard !parsed.isEmpty else {
             errorMessage = "Usage response had no limit data."
